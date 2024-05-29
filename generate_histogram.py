@@ -2,16 +2,18 @@ import os
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from pandas import DataFrame
 
 
-def generate_histogram(input_file):
-    path = str(os.path.join(os.path.dirname(__file__), 'results', input_file))
+def generate_histogram(input_file: str) -> None:
+    """Script for generating histogram"""
+    path: str = str(os.path.join(os.path.dirname(__file__), 'results', input_file))
 
     if not os.path.exists(path):
         print(f'File {input_file} not found.')
         return
 
-    df = pd.read_csv(path)
+    df: DataFrame = pd.read_csv(path)
 
     if 'totalScore' in df.columns:
         df['totalScore'].hist(bins=10)
