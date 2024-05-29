@@ -1,14 +1,17 @@
 import os
 import random
+import sys
+
 import cv2
 from sys import platform
-from face_sdk_3divi import FacerecService, Config, Capturer
+from face_sdk_3divi import FacerecService, Config, Capturer, Error
 from face_sdk_3divi.modules.context import Context
 from face_sdk_3divi.modules.processing_block import ProcessingBlock
 
 
 class ImageCollection:
     """Find Collection of images in special directory and return a list of them"""
+
     def __init__(self, root_dir: str, num_processed: int | None = None) -> None:
         self.root_dir = root_dir
         self.num_processed = num_processed
@@ -32,6 +35,7 @@ class ImageCollection:
 
 class ImageQualityAssessor:
     """Class for assessing the quality of an image using SDK functions"""
+
     def __init__(self, sdk_path: str, modification: str) -> None:
         self.sdk_path = sdk_path
         self.modification = modification
@@ -49,12 +53,16 @@ class ImageQualityAssessor:
         else:  # for Linux
             sdk_dll_path: str = os.path.join(self.sdk_path, 'lib', 'libfacerec.so')
             self.sdk_onnx_path = os.path.join(self.sdk_path, 'lib')
-
-        return FacerecService.create_service(
-            sdk_dll_path,
-            sdk_conf_dir,
-            f'{self.sdk_path}/license'
-        )
+        try:
+            service = FacerecService.create_service(
+                sdk_dll_path,
+                sdk_conf_dir,
+                f'{self.sdk_path}/license'
+            )
+        except FileNotFoundError as e:
+            print(f'{e} Try checking the sdk_path')
+            sys.exit(1)
+        return service
 
     def _create_quality_block(self) -> ProcessingBlock:
         """Create and return a quality block"""
@@ -65,8 +73,12 @@ class ImageQualityAssessor:
         }
         if self.modification == 'assessment':
             quality_config['config_name'] = 'quality_assessment.xml'
-
-        return self.service.create_processing_block(quality_config)
+        try:
+            quality_block = self.service.create_processing_block(quality_config)
+        except Error:
+            print(f'Unknown modification {self.modification} for QUALITY_ASSESSMENT_ESTIMATOR')
+            sys.exit(1)
+        return quality_block
 
     def _create_capturer(self) -> Capturer:
         """Create and return a capturer"""
@@ -105,26 +117,32 @@ class ImageQualityAssessor:
 
         if ioData['objects']:
             obj: Context = ioData['objects'][0]
-            return {
-                'filename': image_name,
-                'confidence': '{:.2f}'.format(round(obj['confidence'].get_value(), 2)),
-                'totalScore': int(obj['quality']['total_score'].get_value() * 100),
-                'isSharp': int(obj['quality']['is_sharp'].get_value()),
-                'sharpnessScore': int(obj['quality']['sharpness_score'].get_value() * 100),
-                'isEvenlyIlluminated': int(obj['quality']['is_evenly_illuminated'].get_value()),
-                'illuminationScore': int(obj['quality']['illumination_score'].get_value() * 100),
-                'noFlare': int(obj['quality']['no_flare'].get_value()),
-                'isLeftEyeOpened': int(obj['quality']['is_left_eye_opened'].get_value()),
-                'isRightEyeOpened': int(obj['quality']['is_right_eye_opened'].get_value()),
-                'isRotationAcceptable': int(obj['quality']['is_rotation_acceptable'].get_value()),
-                'notMasked': int(obj['quality']['not_masked'].get_value()),
-                'isNeutralEmotion': int(obj['quality']['is_neutral_emotion'].get_value()),
-                'isEyesDistanceAcceptable': int(obj['quality']['is_eyes_distance_acceptable'].get_value()),
-                'eyesDistance': obj['quality']['eyes_distance'].get_value(),
-                'isMarginsAcceptable': int(obj['quality']['is_margins_acceptable'].get_value()),
-                'isNotNoisy': int(obj['quality']['is_not_noisy'].get_value()),
-                'hasWatermark': int(obj['quality']['has_watermark'].get_value()),
-                'dynamicRangeScore': int(obj['quality']['dynamic_range_score'].get_value() * 100),
-                'isDynamicRangeAcceptable': int(obj['quality']['is_dynamic_range_acceptable'].get_value())
-            }
+            if self.modification == 'assessment':
+                return {
+                    'filename': image_name,
+                    'confidence': '{:.2f}'.format(round(obj['confidence'].get_value(), 2)),
+                    'totalScore': int(obj['quality']['total_score'].get_value() * 100),
+                    'isSharp': int(obj['quality']['is_sharp'].get_value()),
+                    'sharpnessScore': int(obj['quality']['sharpness_score'].get_value() * 100),
+                    'isEvenlyIlluminated': int(obj['quality']['is_evenly_illuminated'].get_value()),
+                    'illuminationScore': int(obj['quality']['illumination_score'].get_value() * 100),
+                    'noFlare': int(obj['quality']['no_flare'].get_value()),
+                    'isLeftEyeOpened': int(obj['quality']['is_left_eye_opened'].get_value()),
+                    'isRightEyeOpened': int(obj['quality']['is_right_eye_opened'].get_value()),
+                    'isRotationAcceptable': int(obj['quality']['is_rotation_acceptable'].get_value()),
+                    'notMasked': int(obj['quality']['not_masked'].get_value()),
+                    'isNeutralEmotion': int(obj['quality']['is_neutral_emotion'].get_value()),
+                    'isEyesDistanceAcceptable': int(obj['quality']['is_eyes_distance_acceptable'].get_value()),
+                    'eyesDistance': obj['quality']['eyes_distance'].get_value(),
+                    'isMarginsAcceptable': int(obj['quality']['is_margins_acceptable'].get_value()),
+                    'isNotNoisy': int(obj['quality']['is_not_noisy'].get_value()),
+                    'hasWatermark': int(obj['quality']['has_watermark'].get_value()),
+                    'dynamicRangeScore': int(obj['quality']['dynamic_range_score'].get_value() * 100),
+                    'isDynamicRangeAcceptable': int(obj['quality']['is_dynamic_range_acceptable'].get_value())
+                }
+            elif self.modification == 'estimation':
+                return {
+                    'filename': image_name,
+                    'totalScore': int(obj['quality']['total_score'].get_value() * 100)
+                }
         return None
